@@ -1,8 +1,13 @@
 # Hybrid-Neural-Decoder-for-Hand-Trajectory-Estimation-
 
 This project aims to develop a causal brain-machine interface decoder that estimates continuous two-dimensional hand trajectories from motor-cortical spike trains. The system processes neural activity recorded from 98 units during repeated reaching movements and predicts the monkey’s hand position in real time, supporting neural control strategies for hypothetical prosthetic devices. Key tasks include:
+
 ✧ Neural Data Processing and Feature Engineering: Binned 1 ms spike trains into 20 ms neural-count features to match the online evaluation interval. Constructed cumulative spike-count representations and recent-bin firing features to support both reach-direction classification and local displacement estimation.
+
 ✧ Causal Direction Classification: Implemented a time-bin-specific Linear Discriminant Analysis classifier to estimate the intended reaching direction from available neural activity only. Applied a top-3 soft weighting strategy to reduce early hard-classification errors and improve robustness under causal decoding constraints. 
+
 ✧ Trajectory Prior and Displacement Regression: Combined direction-conditioned empirical mean trajectories with a global ridge-regression displacement model. The trajectory prior captured stereotyped reaching patterns, while the regression component introduced trial-specific corrections based on recent neural evidence.
+
 ✧ Online Fusion and Geometric Constraint: Designed a sigmoid fusion schedule that relies more on the stable trajectory prior early in the movement and gradually shifts toward neural displacement estimates as more spikes become available. Added an angular constraint to suppress implausible updates and maintain consistency with the estimated target direction. 
+
 ✧ Performance Evaluation and Optimization: Validated the decoder using an internal held-out split and official competition evaluation. The final model achieved strong trajectory-estimation accuracy with an official RMSE of 8.686 raw position units  with a very short runtime of 0.602 s, demonstrating a practical balance between accuracy, causality, and computational efficiency. 
