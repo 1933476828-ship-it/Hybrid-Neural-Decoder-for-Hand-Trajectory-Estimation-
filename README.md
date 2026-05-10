@@ -224,14 +224,16 @@ This makes the method lightweight, robust, and suitable for low-latency BCI-styl
 Place the following files in the same folder named `BMI`:
 
 ```text
-BMI/
-├── positionEstimatorTraining.m
-├── positionEstimator.m
+Hybrid-Neural-Decoder-for-Hand-Trajectory-Estimation/
 ├── testFunction_for_students_MTb.m
-└── monkeydata_training.mat
+└── BMI/
+    ├── positionEstimatorTraining.m
+    ├── positionEstimator.m
+    └── monkeydata_training.mat
 ```
 
-Then open MATLAB, set the `BMI` folder as the current working directory, and run:
+Then open MATLAB, set the repository root folder as the current working directory, and run:
+
 
 ```matlab
 testFunction_for_students_MTb
