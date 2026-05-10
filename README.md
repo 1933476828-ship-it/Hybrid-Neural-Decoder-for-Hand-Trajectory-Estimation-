@@ -208,32 +208,6 @@ The angular constraint improved decoding stability by preventing implausible mov
 
 ---
 
-## Repository Structure
-
-```text
-Hybrid-Neural-Decoder-for-Hand-Trajectory-Estimation/
-│
-├── README.md
-├── main.m
-├── positionEstimator.m
-├── positionEstimatorTraining.m
-├── testFunction_for_students_MTb.m
-├── monkeydata_training.mat
-├── report/
-│   └── BMI_report.pdf
-├── figures/
-│   ├── decoder_pipeline.png
-│   ├── internal_decoding_result.png
-│   ├── classifier_comparison.png
-│   ├── fusion_comparison.png
-│   └── constraint_comparison.png
-└── results/
-    └── official_result_summary.txt
-```
-
-The actual file structure may vary depending on how the repository is organized.
-
----
 
 ## Installation
 
@@ -254,29 +228,6 @@ cd Hybrid-Neural-Decoder-for-Hand-Trajectory-Estimation-
 
 ---
 
-## Usage
-
-Open MATLAB and set the repository folder as the working directory.
-
-Train the decoder:
-
-```matlab
-modelParameters = positionEstimatorTraining(monkeydata_training);
-```
-
-Run online position estimation:
-
-```matlab
-decodedHandPos = positionEstimator(test_data, modelParameters);
-```
-
-Evaluate the decoder using the provided testing script:
-
-```matlab
-testFunction_for_students_MTb
-```
-
----
 
 ## Main Files
 
