@@ -221,27 +221,31 @@ This makes the method lightweight, robust, and suitable for low-latency BCI-styl
 
 ## Usage
 
-Open MATLAB and place the dataset and code files in the working directory.
+This repository is organized so that the decoder can be evaluated directly using the provided MATLAB test script.
 
-Train the model:
-
-```matlab
-modelParameters = positionEstimatorTraining(trainingData);
-```
-
-Decode a test trial online:
+Place the dataset file `monkeydata_training.mat` in the same working directory as the MATLAB source files, then open MATLAB and run:
 
 ```matlab
-[decodedPosX, decodedPosY] = positionEstimator(past_current_trial, modelParameters);
+testFunction_for_students_MTb
 ```
 
-Run the evaluation script:
+The script will automatically:
 
-```matlab
-RMSE = testFunction_for_students_MTb();
+- load the training data,
+- train the decoder using `positionEstimatorTraining.m`,
+- call `positionEstimator.m` for causal online decoding,
+- evaluate the predicted 2-D hand trajectories,
+- plot decoded trajectories against actual trajectories,
+- report the final RMSE and runtime.
+
+The main files used during evaluation are:
+
+```text
+positionEstimatorTraining.m
+positionEstimator.m
+testFunction_for_students_MTb.m
+monkeydata_training.mat
 ```
-
----
 
 ## Requirements
 
