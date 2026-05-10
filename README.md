@@ -1,252 +1,255 @@
 # Hybrid Neural Decoder for Hand Trajectory Estimation
 
-A lightweight causal brain-computer interface (BCI) decoder for reconstructing continuous 2-D hand trajectories from motor-cortical spike trains.
+A lightweight causal brain-computer interface (BCI) decoder for continuous 2-D hand trajectory estimation from motor-cortical spike trains.
 
-This project was developed for a neural decoding competition, where the goal was to estimate hand position in real time using only neural activity available up to the current prediction step. The decoder combines direction classification, empirical trajectory priors, local displacement regression, temporal fusion, and geometric constraints to achieve stable and computationally efficient neural decoding.
+This project was developed for a neural decoding competition. The task was to reconstruct hand position during reaching movements using only neural spike activity available up to the current prediction time. The final method combines direction classification, empirical trajectory priors, displacement regression, online fusion, and geometric regularization to produce stable low-latency trajectory estimates.
+
+In the official hidden-test evaluation, the decoder achieved an RMSE of **8.686**, ranked **9/30** in RMSE, and ranked **1/30** in total training and prediction time with a runtime of **0.602 s**.
 
 ---
 
 ## Overview
 
-Brain-computer interfaces require decoders that can transform neural activity into continuous control signals for external devices such as prosthetic arms, robotic manipulators, cursors, or rehabilitation systems. In this project, the task is to estimate 2-D hand position from motor-cortical spike trains recorded during reaching movements.
+Brain-computer interfaces require causal decoders that translate neural activity into continuous control signals for external devices, such as prosthetic arms, robotic manipulators, cursors, or rehabilitation systems.
 
-The main challenge is **causality**: during online decoding, the model can only use spike activity observed up to the current time point. It cannot access future neural activity or future hand positions. Therefore, the decoder must make stable real-time predictions under limited information.
+In this project, the decoder estimates the current 2-D hand position from motor-cortical spike trains recorded during reaching movements. The key constraint is that prediction must be **causal**: at each decoding step, the model can only use the spike activity observed up to the current time point.
 
-To address this, this repository implements a **hybrid direction-and-displacement decoder** that combines:
+The implemented decoder is designed to balance three goals:
 
-- time-bin-specific LDA direction classification,
-- top-K weighted empirical trajectory priors,
-- ridge-regression displacement estimation,
-- sigmoid prior-evidence fusion,
-- and angular geometric constraints.
-
-The final decoder achieved an official hidden-test RMSE of **8.686** and ranked **1st in total training and prediction time** with a runtime of **0.602 s**.
-
----
-
-## Key Features
-
-- **Causal online decoding**
-  - Predicts hand position using only neural activity available up to the current time step.
-
-- **20 ms neural binning**
-  - Converts 1 ms spike trains into 20 ms spike-count features to match the online evaluation interval.
-
-- **Time-bin LDA direction inference**
-  - Uses cumulative spike counts to infer the intended reaching direction at each time bin.
-
-- **Top-K trajectory prior**
-  - Avoids overcommitting to a single predicted direction by combining the top-K likely empirical mean trajectories.
-
-- **Ridge-regression displacement model**
-  - Estimates local hand-position updates using recent neural activity.
-
-- **Sigmoid online fusion**
-  - Relies more on the empirical trajectory prior early in the trial and gradually shifts toward neural displacement evidence.
-
-- **Angular geometric constraint**
-  - Suppresses implausible trajectory updates and improves decoding stability.
-
-- **Low computational cost**
-  - Designed for fast training and prediction, making it suitable for low-latency BCI applications.
+- **Accuracy**: follow the actual 2-D hand trajectory as closely as possible.
+- **Stability**: avoid sudden implausible jumps during online decoding.
+- **Speed**: keep training and prediction computationally lightweight.
 
 ---
 
 ## Method Summary
 
-The decoder follows the pipeline below:
+The decoder uses a hybrid direction-and-displacement strategy.
 
 ```text
 Motor-Cortical Spike Trains
-          ↓
+        ↓
 20 ms Spike Binning
-          ↓
+        ↓
 Cumulative Spike Counts
-          ↓
+        ↓
 Time-Bin LDA Direction Classification
-          ↓
-Top-K Weighted Empirical Trajectory Prior
-          ↓
+        ↓
+Top-K Weighted Mean-Trajectory Prior
+        ↓
 Recent-Bin Spike Features
-          ↓
-Ridge-Regression Displacement Estimation
-          ↓
-Sigmoid Fusion
-          ↓
-Angular Constraint
-          ↓
+        ↓
+Ridge-Regression Displacement Estimate
+        ↓
+Sigmoid Prior-Regression Fusion
+        ↓
+Angular Geometric Constraint
+        ↓
 Final 2-D Hand Position Estimate
 ```
 
 ---
 
+## Core Implementation
+
+### `positionEstimatorTraining.m`
+
+This function trains all model parameters from the training trials.
+
+It performs:
+
+- 20 ms spike binning,
+- cumulative spike-count feature construction,
+- empirical mean trajectory estimation for each reaching direction,
+- final target-position estimation,
+- time-bin-specific LDA training,
+- global ridge-regression training for local displacement prediction,
+- angular constraint parameter setup.
+
+The main learned parameters include:
+
+- `ldaW` and `ldaC`: LDA weights and intercepts for direction classification,
+- `meanTraj`: empirical mean trajectory for each direction,
+- `targetPos`: average final target positions,
+- `regW`: ridge-regression weights for displacement estimation,
+- `cosThresh` and `sinThresh`: angular constraint thresholds.
+
+---
+
+### `positionEstimator.m`
+
+This function performs online causal decoding.
+
+At each prediction call, it receives the spike prefix available so far and returns the estimated current hand position.
+
+The online decoding procedure includes:
+
+1. **Spike feature extraction**
+   - Uses cumulative spike counts for direction classification.
+   - Uses the two most recent 20 ms spike bins for displacement regression.
+
+2. **LDA direction scoring**
+   - Computes direction scores from cumulative spike counts.
+   - Selects the top-3 most likely reaching directions.
+
+3. **Top-K trajectory prior**
+   - Combines the top-3 empirical mean trajectories using softmax weights.
+   - Provides a stable prior estimate of hand position.
+
+4. **Ridge-regression displacement prediction**
+   - Uses square-root-transformed recent spike counts.
+   - Predicts local 2-D displacement from the previously decoded position.
+
+5. **Sigmoid fusion**
+   - Early predictions rely more on the empirical trajectory prior.
+   - Later predictions rely more on the regression-based displacement estimate.
+
+6. **Angular constraint**
+   - Suppresses implausible updates that deviate too far from the estimated target direction.
+   - Helps reduce unstable jumps during online decoding.
+
+The function uses persistent variables to maintain information across repeated calls within the same trial, including cumulative spike counts and recent spike-bin history.
+
+---
+
+### `testFunction_for_students_MTb.m`
+
+This script evaluates the decoder.
+
+It:
+
+- loads the monkey reaching dataset,
+- splits trials into training and testing sets,
+- trains the decoder using `positionEstimatorTraining`,
+- calls `positionEstimator` causally every 20 ms from 320 ms onward,
+- plots decoded trajectories against actual hand trajectories,
+- computes RMSE,
+- reports total runtime.
+
+---
+
 ## Dataset
 
-The project uses motor-cortical spike trains recorded during repeated reaching movements.
+The dataset contains neural and kinematic recordings from reaching movements.
 
-Each trial contains:
+Each trial includes:
 
-- neural spike trains from **98 units**,
-- aligned hand-position trajectories,
+- spike trains from **98 neural units**,
+- hand-position trajectories,
 - reaching movements toward **8 target directions**,
 - spike data sampled at **1 ms resolution**.
 
-For online decoding, spike trains are binned into **20 ms intervals**, and the decoder predicts the current 2-D hand position at each evaluation step.
+The decoder bins spike trains into **20 ms intervals** and predicts hand position at the same temporal resolution.
 
 ---
 
-## Decoder Architecture
+## Decoder Details
 
-### 1. Spike-Train Binning
+### 1. Spike Binning
 
-Raw spike trains are converted into 20 ms spike-count bins. This reduces the dimensionality of the neural signal while matching the online prediction interval.
+Raw spike trains are converted into 20 ms spike-count bins. This reduces the neural data dimensionality and matches the online evaluation interval.
 
-For each neuron and time bin, the decoder counts the number of spikes observed within the current 20 ms window.
+### 2. Time-Bin LDA Direction Classification
 
----
+For each time bin, a regularized Linear Discriminant Analysis classifier is trained using cumulative spike counts. This allows the decoder to estimate the intended reaching direction at each point in time.
 
-### 2. Direction Classification with LDA
+### 3. Top-3 Weighted Trajectory Prior
 
-A separate Linear Discriminant Analysis classifier is trained for each time bin. The classifier uses cumulative spike-count features to estimate the most likely reaching direction.
+Instead of trusting only the single most likely direction, the decoder selects the top-3 LDA directions and combines their empirical mean trajectories using softmax weights. This improves robustness when early neural evidence is uncertain.
 
-Instead of using a single hard classification, the decoder selects the top-K most likely directions and converts their LDA scores into soft weights.
+### 4. Ridge-Regression Displacement Model
 
-This helps reduce early decoding errors, especially when neural evidence is still limited.
-
----
-
-### 3. Top-K Empirical Trajectory Prior
-
-For each reaching direction, the model computes an empirical mean hand trajectory from the training set.
-
-During online decoding, the top-K predicted directions are combined using softmax weights to form a weighted trajectory prior.
-
-This prior provides a stable estimate of the expected hand position, especially during early movement periods when the spike prefix is short.
-
----
-
-### 4. Ridge-Regression Displacement Estimation
-
-The decoder also uses a ridge-regression model to estimate local 2-D displacement from recent neural activity.
-
-The regression model uses square-root-transformed spike-count features from the current and previous 20 ms bins. This provides a trial-specific correction to the empirical trajectory prior.
-
----
+A global ridge-regression model predicts local 2-D displacement using square-root-transformed spike counts from the two most recent bins. This adds trial-specific correction beyond the average trajectory prior.
 
 ### 5. Sigmoid Online Fusion
 
-The final position estimate is generated by fusing:
+The decoder fuses the empirical trajectory prior and the regression displacement estimate using a sigmoid weighting schedule.
 
-- the top-K empirical trajectory prior, and
-- the ridge-regression displacement estimate.
+This design reflects the idea that:
 
-A sigmoid weighting schedule is used:
-
-- early decoding relies more on the trajectory prior,
-- later decoding relies more on recent neural evidence.
-
-This design balances trajectory stability with trial-specific correction.
-
----
+- early in the movement, the prior trajectory is more reliable;
+- later in the movement, recent neural evidence provides useful trial-specific correction.
 
 ### 6. Angular Geometric Constraint
 
-To reduce unstable updates, an angular constraint is applied after fusion.
+After fusion, an angular constraint checks whether the proposed movement update deviates too far from the estimated target direction.
 
-The constraint compares the proposed displacement direction with the expected direction toward the estimated target. If the proposed update deviates too far, it is projected back into an admissible movement cone.
+If the update is implausible, it is projected back toward an admissible direction and capped with a smaller step length. Otherwise, only a broader maximum step constraint is applied.
 
-This helps prevent sudden jumps and implausible trajectory updates during online decoding.
+This improves trajectory stability while keeping the decoder computationally simple.
 
 ---
 
-## Official Performance
+## Performance
+
+### Official Hidden-Test Evaluation
 
 | Metric | Result |
 |---|---:|
-| Official hidden-test RMSE | **8.686** |
-| Runtime | **0.602 s** |
-| Runtime ranking | **1/30** |
+| RMSE | **8.686** |
 | RMSE ranking | **9/30** |
+| Total training and prediction time | **0.602 s** |
+| Runtime ranking | **1/30** |
 
-The decoder was designed to prioritize both accuracy and computational efficiency. Its low runtime comes from a lightweight structure based on LDA scoring, ridge-regression matrix multiplication, and deterministic post-processing.
+### Internal Validation
 
----
-
-## Internal Validation
-
-The model was also evaluated using an internal held-out split of the available training data. In this validation setting, the decoder achieved:
+Using an internal train-test split, the decoder achieved:
 
 | Metric | Result |
 |---|---:|
-| Internal RMSE | **9.088 raw hand-position units** |
+| Internal RMSE | **9.088** |
 | Approximate converted error | **0.909 cm** |
-| Internal runtime | **8.273 s** |
 
-The decoded trajectories generally followed the eight reaching directions and remained close to the actual hand trajectories for most movements.
-
----
-
-## Ablation Insights
-
-Several design choices were tested during development.
-
-### Direction Classifier
-
-LDA was compared against Poisson Naive Bayes and SVM. LDA provided the best trade-off between accuracy, temporal stability, and computational cost.
-
-### Top-K Prior
-
-Using a top-K weighted trajectory prior improved robustness compared with using only the single most likely direction. The final model used **K = 3**.
-
-### Fusion Strategy
-
-Sigmoid fusion outperformed fixed and linear fusion strategies by allowing the model to rely on the trajectory prior early and neural displacement estimates later.
-
-### Geometric Constraint
-
-The angular constraint improved decoding stability by preventing implausible movement updates, outperforming both step-length-only constraints and no-constraint baselines.
+The decoded trajectories generally followed the main reaching directions and remained close to the actual hand trajectories for most trials.
 
 ---
 
+## Why This Approach Works
 
-## Installation
+The decoder performs well because it combines complementary sources of information:
 
-This project is implemented in MATLAB.
+- cumulative spike counts provide stable direction information;
+- LDA gives fast and reliable reach-direction inference;
+- empirical mean trajectories exploit the structured reaching task;
+- ridge regression captures local trial-specific displacement;
+- sigmoid fusion balances prior stability and neural correction;
+- angular constraints reduce unstable online updates.
 
-Recommended environment:
+This makes the method lightweight, robust, and suitable for low-latency BCI-style decoding.
 
-- MATLAB R2021a or later
-- No external machine learning toolbox required for the core implementation
-- Dataset file: `monkeydata_training.mat`
+---
 
-Clone the repository:
+## Usage
 
-```bash
-git clone https://github.com/1933476828-ship-it/Hybrid-Neural-Decoder-for-Hand-Trajectory-Estimation-.git
-cd Hybrid-Neural-Decoder-for-Hand-Trajectory-Estimation-
+Open MATLAB and place the dataset and code files in the working directory.
+
+Train the model:
+
+```matlab
+modelParameters = positionEstimatorTraining(trainingData);
+```
+
+Decode a test trial online:
+
+```matlab
+[decodedPosX, decodedPosY] = positionEstimator(past_current_trial, modelParameters);
+```
+
+Run the evaluation script:
+
+```matlab
+RMSE = testFunction_for_students_MTb();
 ```
 
 ---
 
+## Requirements
 
-## Main Files
+- MATLAB
+- `monkeydata_training.mat`
+- No external deep learning framework is required
 
-### `positionEstimatorTraining.m`
-
-Trains the decoder parameters, including:
-
-- time-bin LDA classifiers,
-- empirical mean trajectories,
-- ridge-regression displacement model,
-- fusion and constraint parameters.
-
-### `positionEstimator.m`
-
-Performs causal online decoding. At each call, it estimates the current 2-D hand position using only the spike activity observed so far.
-
-### `testFunction_for_students_MTb.m`
-
-Runs the evaluation protocol and reports trajectory RMSE and runtime.
+The implementation is intentionally lightweight and relies on classical machine learning and regression methods rather than large neural networks.
 
 ---
 
@@ -255,6 +258,7 @@ Runs the evaluation protocol and reports trajectory RMSE and runtime.
 This project is relevant to:
 
 - brain-computer interfaces,
+- brain-machine interfaces,
 - neural decoding,
 - motor intention estimation,
 - prosthetic control,
@@ -262,19 +266,19 @@ This project is relevant to:
 - rehabilitation robotics,
 - low-latency human-machine interfaces.
 
-Although the current decoder was developed for an offline competition dataset, the same design principles are relevant to real-time neural interfaces where computational efficiency and causal prediction are essential.
+Although developed for a competition dataset, the same ideas are applicable to neural interfaces where real-time prediction, low computational cost, and causal decoding are important.
 
 ---
 
 ## Limitations
 
-The current decoder has several limitations:
+The current method has several limitations:
 
-- It relies on stereotyped direction-conditioned trajectory priors.
-- The displacement regressor is global rather than direction-specific.
-- The fusion schedule is manually designed rather than learned.
+- It relies on stereotyped direction-specific mean trajectories.
+- The displacement regression model is global rather than direction-specific.
+- The fusion schedule is manually designed instead of learned.
 - The angular constraint is heuristic and does not explicitly model uncertainty.
-- The model does not include a full probabilistic state-space formulation such as a Kalman filter.
+- It does not include a full probabilistic state-space model such as a Kalman filter.
 
 ---
 
@@ -284,28 +288,29 @@ Potential improvements include:
 
 - direction-specific displacement regressors,
 - mixture-of-experts decoding,
-- learned temporal fusion schedules,
+- learned fusion schedules,
+- uncertainty-aware target estimation,
 - probabilistic trajectory constraints,
 - Kalman-filter or particle-filter extensions,
-- uncertainty-aware target-direction estimation,
-- real-time integration with prosthetic or robotic control systems.
+- integration with real-time prosthetic or robotic control systems.
 
 ---
 
 ## Authors
 
-- Crist Lian  
-- Yange Sun  
-- Junmou Tang  
-- Shiyue Yang  
+- Crist Lian
+- Yange Sun
+- Junmou Tang
+- Shiyue Yang
 
-All authors contributed to algorithm development, decoder refinement, result analysis, and report writing.
 
 ---
 
 ## Disclaimer
 
 This repository is intended for research and educational purposes. It is not a clinically validated medical device or an approved prosthetic-control system.
+
+The neural data have been generously provided by the laboratory of Prof. Krishna Shenoy at Stanford University. The data are to be used exclusively for educational purposes in the BIOE70011 Brain Machine Interfaces 2025--2026 course.
 
 ---
 
