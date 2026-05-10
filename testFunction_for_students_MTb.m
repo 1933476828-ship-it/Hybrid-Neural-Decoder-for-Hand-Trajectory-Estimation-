@@ -15,7 +15,7 @@ rng(2013);
 ix = randperm(length(trial));
 
 % addpath("BMI_KNN");
-addpath("Body Mass Index (BMI)");
+addpath("BMI");
 
 % Select training and testing data (you can choose to split your data in a different way if you wish)
 trainingData = trial(ix(1:50),:);
